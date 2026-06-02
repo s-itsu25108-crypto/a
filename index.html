@@ -1,0 +1,1497 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>レトロ3D サバイバル・レーサー</title>
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap');
+        
+        .font-retro {
+            font-family: 'Press Start 2P', monospace;
+        }
+        .font-tech {
+            font-family: 'Share Tech Mono', monospace;
+        }
+        
+        @keyframes pulse-fast {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        .pulse-urgent {
+            animation: pulse-fast 0.5s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-white overflow-hidden select-none font-sans">
+
+    <!-- メインコンテナ -->
+    <div class="relative w-screen h-screen flex flex-col items-center justify-center bg-radial from-slate-900 to-black p-4">
+        
+        <!-- ゲームエリア外枠 -->
+        <div class="relative w-full max-w-4xl aspect-[4/3] bg-black rounded-xl overflow-hidden border-8 border-slate-800 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex flex-col">
+            
+            <!-- キャンバス (ゲーム画面) -->
+            <canvas id="gameCanvas" class="w-full h-full object-cover"></canvas>
+
+            <!-- ================= START SCREEN (収まりが良くなるように余白を最適化) ================= -->
+            <div id="startScreen" class="absolute inset-0 bg-black/90 flex flex-col items-center justify-between p-4 md:p-6 z-10 overflow-y-auto">
+                <div class="text-center mt-2 md:mt-4">
+                    <h1 class="text-3xl md:text-4xl font-retro text-yellow-400 tracking-wider drop-shadow-[0_6px_0_#996600] mb-2 animate-pulse">
+                        AMBULANCE RUN
+                    </h1>
+                    <p class="text-[10px] md:text-xs font-retro text-red-500 tracking-widest font-bold">HIGH-SPEED CITY SURVIVAL</p>
+                </div>
+
+                <!-- 統計・記録 (高さを抑えるためパディングとマージンを圧縮) -->
+                <div class="w-full max-w-lg bg-slate-900/90 border-4 border-slate-700 rounded-xl p-3 md:p-4 my-2 text-center shadow-2xl">
+                    <h2 class="text-xs md:text-sm font-retro text-cyan-400 mb-2">PERSONAL BEST</h2>
+                    <div class="bg-black/50 p-2 md:p-3 rounded-lg border border-slate-800 font-retro text-xs flex justify-between items-center">
+                        <span class="text-gray-400">RECORD:</span>
+                        <span id="bestDistance" class="text-yellow-400 text-base md:text-lg font-bold">0 m</span>
+                    </div>
+                    <div class="mt-2 text-[10px] md:text-xs text-slate-400 font-mono text-left space-y-1 bg-black/40 p-2 md:p-3 rounded border border-slate-800">
+                        <p><i class="fas fa-shield-alt text-red-500 mr-2"></i> 障害物や他車に衝突するとアーマー(HP)が減少します。</p>
+                        <p><i class="fas fa-bolt text-yellow-400 mr-2"></i> 前の車に密着して押すと<b>「バンプドラフト」</b>が成立！カメラがズームし、敵のリア（後ろ姿）をドアップで映しながら時速440km/hへ限界突破！</p>
+                        <p><i class="fas fa-city text-cyan-400 mr-2"></i> 舞台はネオンきらめくサイバー市街地！大破するとその場にお墓が立ちます。</p>
+                    </div>
+                </div>
+
+                <!-- 操作説明 (ゲーム画面に完全にフィットするサイズに縮小) -->
+                <div class="text-center max-w-lg mb-2 md:mb-4 w-full">
+                    <div class="flex justify-center space-x-4 md:space-x-6 text-[10px] md:text-xs text-slate-400 mb-3 md:mb-4 font-retro font-bold">
+                        <div><span class="bg-slate-800 px-2 py-1 rounded text-white border border-slate-600">▲</span>/<span class="bg-slate-800 px-2 py-1 rounded text-white border border-slate-600">W</span> アクセル</div>
+                        <div><span class="bg-slate-800 px-2 py-1 rounded text-white border border-slate-600">▼</span>/<span class="bg-slate-800 px-2 py-1 rounded text-white border border-slate-600">S</span> ブレーキ</div>
+                        <div><span class="bg-slate-800 px-2 py-1 rounded text-white border border-slate-600">◀▶</span>/<span class="bg-slate-800 px-2 py-1 rounded text-white border border-slate-600">A D</span> 操舵</div>
+                    </div>
+                    <p class="text-yellow-400 font-retro text-[10px] animate-pulse mb-3">[ SPACE ] キー または クリックでスタート！</p>
+                    <p id="audioNotice" class="text-cyan-400 font-mono text-[9px] mb-2 opacity-80">※音量にご注意ください（マッスルV8サウンド波形合成）</p>
+                    <button id="startBtn" class="px-8 md:px-10 py-3 md:py-4 bg-red-600 hover:bg-red-500 border-b-4 md:border-b-8 border-red-800 font-retro text-white text-base md:text-lg rounded-xl transition-all transform active:scale-95 shadow-lg shadow-red-900/50">
+                        START GAME
+                    </button>
+                </div>
+            </div>
+
+            <!-- ================= HUD / IN-GAME OVERLAYS ================= -->
+            <!-- ゲーム中のHUD -->
+            <div id="hud" class="hidden absolute top-0 inset-x-0 p-4 pointer-events-none flex justify-between items-start font-tech text-2xl z-10">
+                <!-- 左側: アーマー(HP)ゲージ -->
+                <div class="bg-black/75 p-3 rounded-lg border border-slate-800 flex flex-col space-y-1 w-44 md:w-52 text-left">
+                    <span class="text-gray-400 text-[10px] font-retro">MACHINE ARMOR (HP)</span>
+                    <div class="flex items-center space-x-2">
+                        <div class="flex-1 bg-slate-950 h-4 rounded overflow-hidden border border-slate-800">
+                            <div id="hpBar" class="bg-red-600 h-full transition-all duration-75" style="width: 100%"></div>
+                        </div>
+                        <span id="hpText" class="font-bold text-red-500 text-lg font-retro">100</span>
+                    </div>
+                </div>
+
+                <!-- 中央: 走行メーター -->
+                <div class="bg-black/75 px-6 py-2 rounded-lg border border-slate-800 flex flex-col items-center">
+                    <span class="text-gray-400 text-[10px] font-retro">DISTANCE</span>
+                    <span id="hudDistance" class="text-3xl font-bold text-yellow-400 font-retro">0 <span class="text-xs">m</span></span>
+                </div>
+
+                <!-- 右側: 速度メーター -->
+                <div class="bg-black/75 p-3 rounded-lg border border-slate-800 flex flex-col space-y-1 w-36 md:w-44 text-center">
+                    <span class="text-gray-400 text-[10px] font-retro">SPEED</span>
+                    <span id="hudSpeed" class="text-3xl md:text-4xl font-bold text-cyan-400">0 <span class="text-sm text-cyan-500">km/h</span></span>
+                    <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden mt-1 border border-slate-800">
+                        <div id="speedBar" class="bg-cyan-400 h-2" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 中央のメッセージ表示 -->
+            <div class="absolute inset-0 pointer-events-none flex items-center justify-center z-20 overflow-hidden">
+                <div id="centerMessage" class="hidden font-retro text-xl md:text-3xl text-yellow-400 drop-shadow-[0_4px_4px_rgba(0,0,0,1)] bg-black/85 px-6 py-3 rounded-lg border-2 border-yellow-500 shadow-2xl">
+                    GET READY!
+                </div>
+            </div>
+
+            <!-- ================= GAME OVER / RESULT SCREEN ================= -->
+            <div id="resultScreen" class="hidden absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 z-10">
+                <h2 id="resultTitle" class="text-5xl font-retro text-red-600 mb-2 drop-shadow-[0_4px_0_#500]">AMBULANCE CRASH</h2>
+                <p id="resultSubtitle" class="text-xs font-retro text-gray-400 mb-8">救急車が大破しました！</p>
+
+                <div class="w-full max-w-sm bg-slate-900 border-4 border-slate-700 rounded-xl p-6 mb-8 text-center font-retro space-y-4 text-sm shadow-2xl">
+                    <div class="flex justify-between border-b border-slate-800 pb-2">
+                        <span class="text-gray-400">走行記録:</span>
+                        <span id="resDistance" class="text-yellow-400 text-lg">0 m</span>
+                    </div>
+                    <div class="flex justify-between border-b border-slate-800 pb-2">
+                        <span class="text-gray-400">最高速度:</span>
+                        <span id="resMaxSpeed" class="text-cyan-400">0 km/h</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-gray-400">判定評価:</span>
+                        <span id="resRank" class="text-green-400 font-bold text-lg">B Class</span>
+                    </div>
+                </div>
+
+                <p class="text-yellow-400 font-retro text-[10px] animate-pulse mb-4">[ SPACE ] キーでリトライ / [ M ] キーでメニューへ</p>
+                <div class="flex space-x-6">
+                    <button onclick="showMainMenu()" class="px-8 py-4 bg-slate-800 hover:bg-slate-700 border-b-4 border-slate-950 font-retro text-xs rounded-xl transition-all transform active:scale-95 text-white">
+                        メインメニュー
+                    </button>
+                    <button id="retryBtn" class="px-8 py-4 bg-yellow-500 hover:bg-yellow-400 border-b-4 border-yellow-700 font-retro text-xs text-black rounded-xl transition-all transform active:scale-95">
+                        リトライ
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="mt-4 text-center text-[10px] md:text-xs text-slate-500 max-w-xl px-4">
+            <p>※キーボード操作: W/A/S/D または 矢印キーに対応しています。</p>
+            <p class="mt-1">他車との激激衝突衝撃に耐えながら、最長走行レコードを目指しましょう！</p>
+        </div>
+    </div>
+
+    <!-- ================= GAME CODE (JAVASCRIPT) ================= -->
+    <script>
+        // --- 定数 & 設定 ---
+        const FPS = 60;
+        const STEP = 1/FPS;
+        const CANVAS_W = 1024;
+        const CANVAS_H = 768;
+        
+        // 疑似3D道路プロパティ
+        const ROAD_WIDTH = 2000;
+        const SEGMENT_LENGTH = 150; 
+        const CAMERA_DEPTH_BASE = 0.70; // パースをさらに強めてリッジ・デイトナ風に
+        let cameraDepth = CAMERA_DEPTH_BASE;
+        const CAMERA_HEIGHT_BASE = 680; // 視点を下げて超絶スピード感を強調！
+        let cameraHeight = CAMERA_HEIGHT_BASE;
+        const DRAW_DISTANCE = 300;  
+        const CENTRIFUGAL = 0.35;   
+        
+        // 物理・プレイヤー設定 (最初から超モンスターマシン仕様)
+        const MAX_SPEED = 380;      // 最大時速 380 km/h 
+        const ACCEL = 160;          // 加速度
+        const BREAKING = -200;      
+        const DECEL = -50;          
+        const OFF_ROAD_DECEL = -350;// 芝生に入ると急激に減速
+        const OFF_ROAD_LIMIT = 80;  
+
+        // グローバルオブジェクト
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // 音声（Web Audio APIによるリアルなマルチオシレーターエキゾーストサウンド）
+        let audioCtx;
+        let engineOsc1, engineOsc2, engineFilter, engineGain;
+        try {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch (e) {
+            console.warn("Web Audio API is not supported in this browser.");
+        }
+        
+        // 状態変数
+        let keys = {};
+        let trackIndex = 0; 
+        let gameLoopId = null;
+        let isPlaying = false;
+        let isGameOver = false;
+        let hasCleared = false; 
+
+        // プレイヤー状態
+        let playerX = 0;            
+        let position = 0;           
+        let speed = 0;              
+        let maxRecordedSpeed = 0;   
+        let hp = 100;               // マシンの耐久シールド (0でゲームオーバー)
+
+        // 物理スライド・コマスピン挙動
+        let playerXVelocity = 0;    // 横方向 of 慣性スライド速度
+        let carBounceY = 0;         // サスペンションのバウンス揺れ量
+        let carBounceVelocity = 0;  // バウンス慣性
+        let steeringLockTimer = 0;  // 衝突後の操舵不能ロックタイマー
+        let playerSpinAngle = 0;    // コマのようなスピン回転角
+
+        // クラッシュ＆被弾・演出用変数
+        let crashTimer = 0;         
+        let flashScreenTimer = 0;   
+        let screenShake = 0;        
+        let crashParticles = [];    
+        let tyreSmokeParticles = []; // タイヤからの白煙粒子配列
+
+        // ★バンプドラフト演出ステート
+        let bumpDraftTimer = 0;       // バンプドラフト中の画面ズレ時間
+        let bumpDraftingCar = null;   // 押してくれている/押しているライバル車の情報
+        let activePushDraft = false;  // プレイヤーが前の敵車を「プッシュしてバンプドラフト中」か
+
+        // コースセグメント配列 (エンドレスなサーキット構築)
+        let segments = [];
+        let cars = [];              
+        let trackLength = 0;        
+
+        const colors = {
+            sky: '#01579B', 
+            hill: '#263238',
+            grassLight: '#1A237E', // サイバー市街地に合わせたダークネイビー芝生
+            grassDark: '#0D47A1',
+            roadLight: '#37474F',
+            roadDark: '#263238',
+            rumbleLight: '#00E5FF', // ネオンシアンのルンブル
+            rumbleDark: '#D50000',
+            laneLight: '#FFEB3B',
+            laneDark: '#212121'
+        };
+
+        // コース定義 (超ハイスピードで走りやすい緩やかな高速サーキット)
+        const endlessTrackDefinition = {
+            name: "VIRTUA HIGHWAY (SPEEDWAY)",
+            baseColor: { sky: '#0288D1', grassLight: '#33691E', grassDark: '#1B5E20', skyBottom: '#B3E5FC' },
+            length: 3000, 
+            setup: function() {
+                addStraight(200);
+                addLowCurve(150, 1.2);
+                addStraight(200);
+                addHill(150, 60);
+                addLowCurve(150, -1.2);
+                addHill(150, -60);
+                addStraight(300);
+                addLowCurve(200, 2.2); // 緩やかで長いバンク
+                addStraight(300);
+                addLowCurve(200, -2.2);
+                addStraight(400);
+                addHill(150, 80);
+                addStraight(300);
+                addStraight(200); // ループ終点
+            }
+        };
+
+        // --- コース設計補助関数 ---
+        function addSegment(curve, y) {
+            const n = segments.length;
+            segments.push({
+                index: n,
+                p1: { world: { x: 0, y: lastY(), z: n * SEGMENT_LENGTH }, screen: { x: 0, y: 0, w: 0 } },
+                p2: { world: { x: 0, y: y,       z: (n + 1) * SEGMENT_LENGTH }, screen: { x: 0, y: 0, w: 0 } },
+                curve: curve,
+                color: Math.floor(n / 3) % 2 ? {
+                    road: colors.roadDark,
+                    grass: colors.grassDark,
+                    rumble: colors.rumbleDark,
+                    lane: colors.laneDark
+                } : {
+                    road: colors.roadLight,
+                    grass: colors.grassLight,
+                    rumble: colors.rumbleLight,
+                    lane: colors.laneLight
+                },
+                checkpoint: null,
+                sprites: [] 
+            });
+        }
+
+        function lastY() {
+            return segments.length === 0 ? 0 : segments[segments.length - 1].p2.world.y;
+        }
+
+        // 道路の直線生成
+        function addStraight(num) {
+            num = num || 100;
+            for (let i = 0; i < num; i++) {
+                addSegment(0, lastY());
+            }
+        }
+
+        // 道路の起伏生成
+        function addHill(num, height) {
+            const y = lastY();
+            for (let i = 0; i < num; i++) {
+                addSegment(0, y + (Math.sin((i / num) * Math.PI / 2) * height));
+            }
+        }
+
+        // 道路のカーブ生成
+        function addLowCurve(num, curve) {
+            num = num || 100;
+            for (let i = 0; i < num; i++) {
+                addSegment(curve, lastY());
+            }
+        }
+
+        function addSCurves(num, intensity) {
+            addLowCurve(num/4, intensity);
+            addLowCurve(num/2, -intensity);
+            addLowCurve(num/4, intensity);
+        }
+
+        // コース生成メイン (完全無限ループ構成)
+        function buildTrack() {
+            segments = [];
+            endlessTrackDefinition.setup();
+            trackLength = segments.length * SEGMENT_LENGTH;
+
+            // 道路脇のビル、信号、ネオン街灯を設置
+            generateDecorations();
+            
+            // ライバル車を配置
+            generateCars();
+            
+            crashParticles = [];
+            tyreSmokeParticles = [];
+        }
+
+        // 道路脇オブジェクトの生成（サイバービル、ネオン街灯、信号機などの市街地オブジェクトへ移行！）
+        function generateDecorations() {
+            for (let i = 10; i < segments.length - 10; i += 3 + Math.floor(Math.random() * 4)) {
+                const side = Math.random() > 0.5 ? 1 : -1;
+                let spriteType = 'building'; // 基本はビル
+                
+                const rand = Math.random();
+                if (rand < 0.28) {
+                    spriteType = 'streetlight'; // 街灯
+                } else if (rand < 0.48) {
+                    spriteType = 'neon_sign'; // ネオン看板
+                }
+
+                segments[i].sprites.push({
+                    offset: side * (1.35 + Math.random() * 1.5),
+                    type: spriteType,
+                    // ビルやネオンの高さ・カラー個性をランダム付与
+                    heightScale: 0.7 + Math.random() * 0.9,
+                    color: `hsl(${(i * 45) % 360}, 90%, 55%)`
+                });
+            }
+        }
+
+        // --- 描画ユーティリティ ---
+        function resizeCanvas() {
+            canvas.width = CANVAS_W;
+            canvas.height = CANVAS_H;
+        }
+
+        // 3D座標を2Dスクリーン座標に投影
+        function project(p, cameraX, cameraY, cameraZ, width, height) {
+            p.camera = {
+                x: p.world.x - cameraX,
+                y: p.world.y - cameraY,
+                z: p.world.z - cameraZ
+            };
+            
+            if (p.camera.z <= 0) return;
+
+            p.screen.scale = cameraDepth / p.camera.z;
+            p.screen.x = Math.round((width / 2) + (p.screen.scale * p.camera.x * width / 2));
+            p.screen.y = Math.round((height / 2) - (p.screen.scale * p.camera.y * height / 2));
+            p.screen.w = Math.round(p.screen.scale * ROAD_WIDTH * width / 2);
+        }
+
+        // 多角形（ポリゴン）描画
+        function drawPolygon(x1, y1, w1, x2, y2, w2, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(x1 - w1, y1);
+            ctx.lineTo(x2 - w2, y2);
+            ctx.lineTo(x2 + w2, y2);
+            ctx.lineTo(x1 + w1, y1);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // スカイグラデーションの描画 (★空のネオングラデーションをより美しく緻密化！)
+        function drawBackground(curveSum) {
+            let gradient = ctx.createLinearGradient(0, 0, 0, CANVAS_H / 2);
+            gradient.addColorStop(0, '#02001a');  // 深宇宙のダークバイオレット
+            gradient.addColorStop(0.35, '#050c3c');// サイバーディープブルー
+            gradient.addColorStop(0.7, '#8e0e64'); // 鮮やかなネオンマゼンタ
+            gradient.addColorStop(0.9, '#bf360c'); // ネオンオレンジ
+            gradient.addColorStop(1.0, '#00e5ff'); // 地平線のサイバーシアンネオン
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, CANVAS_W, CANVAS_H / 2);
+
+            // ★緻密化：背景にそびえ立つローポリゴンの「超巨大高層ビル群シルエット」
+            ctx.fillStyle = '#050b18'; // 奥の最も暗い超巨大ビルシルエット
+            const hillOffset = (curveSum * 0.06) % CANVAS_W;
+            ctx.beginPath();
+            ctx.moveTo(0, CANVAS_H/2);
+            // 巨大な摩天楼をシルエットで描画
+            let currentX = -150 - hillOffset;
+            while (currentX < CANVAS_W + 300) {
+                const bWidth = 120 + (Math.abs(Math.sin(currentX)) * 180);
+                const bHeight = 250 + (Math.abs(Math.cos(currentX)) * 400); // 圧倒的な巨大摩天楼ビルボード
+                ctx.lineTo(currentX, CANVAS_H/2 - bHeight);
+                ctx.lineTo(currentX + bWidth, CANVAS_H/2 - bHeight);
+                currentX += bWidth;
+            }
+            ctx.lineTo(CANVAS_W, CANVAS_H/2);
+            ctx.closePath();
+            ctx.fill();
+
+            // 手前の巨大ビルシルエット
+            ctx.fillStyle = '#0a172a'; 
+            const hillOffset2 = (curveSum * 0.12) % CANVAS_W;
+            ctx.beginPath();
+            ctx.moveTo(0, CANVAS_H/2);
+            let currentX2 = -180 - hillOffset2;
+            while (currentX2 < CANVAS_W + 300) {
+                const bWidth2 = 150 + (Math.abs(Math.cos(currentX2)) * 220);
+                const bHeight2 = 150 + (Math.abs(Math.sin(currentX2)) * 300);
+                ctx.lineTo(currentX2, CANVAS_H/2 - bHeight2);
+                ctx.lineTo(currentX2 + bWidth2, CANVAS_H/2 - bHeight2);
+                currentX2 += bWidth2;
+            }
+            ctx.lineTo(CANVAS_W, CANVAS_H/2);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // コースセグメント描画 (グリッド緻密化エフェクトを追加)
+        function drawSegment(p1, p2, color, isRumbleSegment) {
+            if (p1.screen.y <= p2.screen.y) return;
+
+            // 芝生
+            ctx.fillStyle = color.grass;
+            ctx.fillRect(0, p2.screen.y, CANVAS_W, p1.screen.y - p2.screen.y);
+
+            // ルンブル (縞模様ピッチを緻密にしてスピード流動感をアップ)
+            const r1 = p1.screen.w * 0.12;
+            const r2 = p2.screen.w * 0.12;
+            drawPolygon(p1.screen.x - p1.screen.w - r1, p1.screen.y, r1, p2.screen.x - p2.screen.w - r2, p2.screen.y, r2, color.rumble);
+            drawPolygon(p1.screen.x + p1.screen.w + r1, p1.screen.y, r1, p2.screen.x + p2.screen.w + r2, p2.screen.y, r2, color.rumble);
+
+            // 道路本体
+            drawPolygon(p1.screen.x, p1.screen.y, p1.screen.w, p2.screen.x, p2.screen.y, p2.screen.w, color.road);
+
+            // ★緻密化：進行方向に高速で流れる「サイバーグリッド・スキャンライン」を描画！
+            if (isRumbleSegment) {
+                ctx.fillStyle = 'rgba(0, 229, 255, 0.08)'; // 極細のシアン光線スリット
+                ctx.beginPath();
+                ctx.moveTo(p1.screen.x - p1.screen.w, p1.screen.y);
+                ctx.lineTo(p2.screen.x - p2.screen.w, p2.screen.y);
+                ctx.lineTo(p2.screen.x + p2.screen.w, p2.screen.y);
+                ctx.lineTo(p1.screen.x + p1.screen.w, p1.screen.y);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            // センターライン (シアン/イエローネオン)
+            if (color.lane !== colors.laneDark) {
+                const l1 = p1.screen.w * 0.035;
+                const l2 = p2.screen.w * 0.035;
+                drawPolygon(p1.screen.x, p1.screen.y, l1, p2.screen.x, p2.screen.y, l2, color.lane);
+            }
+        }
+
+        // スプライト（障害物・市街地オブジェクト）の描画（★ビルをさらに巨大化・緻密化！）
+        function drawSprite(sprite, p, scale, destX) {
+            const width = CANVAS_W;
+            const height = CANVAS_H;
+            
+            let spriteW = 200;
+            let spriteH = 200;
+            let offsetY = -1; 
+
+            // ビジュアルに合わせた大きさ調整（★ビルを大幅に巨大化）
+            if (sprite.type === 'building') {
+                spriteW = 600; // 横幅もかなり太く
+                spriteH = 1400 * sprite.heightScale; // 高さも圧倒的高層ビルに！
+            } else if (sprite.type === 'neon_sign') {
+                spriteW = 240;
+                spriteH = 460 * sprite.heightScale;
+            } else if (sprite.type === 'streetlight') {
+                spriteW = 140;
+                spriteH = 380;
+            }
+
+            const destW = Math.round(spriteW * scale * width / 2);
+            const destH = Math.round(spriteH * scale * width / 2);
+
+            const finalX = destX + (sprite.offset * p.screen.w);
+            const finalY = p.screen.y + Math.round(offsetY * destH);
+
+            if (finalX + destW/2 < 0 || finalX - destW/2 > width) return;
+
+            ctx.save();
+            ctx.translate(finalX, finalY);
+
+            // 都市・サイバーポリゴン描写 (よりエッジを立たせて緻密に)
+            if (sprite.type === 'building') {
+                // 1. ビル側面（影側）
+                ctx.fillStyle = '#040b15';
+                ctx.fillRect(-destW * 0.5, 0, destW * 0.5, destH);
+                
+                // 2. ビル正面（明側）
+                ctx.fillStyle = '#0f1f33';
+                ctx.fillRect(0, 0, destW * 0.5, destH);
+
+                // 3. 発光窓グリッド
+                ctx.fillStyle = sprite.color; 
+                const windowSize = Math.max(2, destW * 0.05);
+                const gap = Math.max(3, destW * 0.07);
+                for (let wy = destH * 0.08; wy < destH * 0.95; wy += gap * 1.5) {
+                    for (let wx = -destW * 0.4; wx < destW * 0.4; wx += gap) {
+                        if (Math.abs(wx) > gap * 0.2 && (Math.sin(wy + wx) > -0.2)) {
+                            ctx.fillRect(wx, wy, windowSize, windowSize * 1.4);
+                        }
+                    }
+                }
+            } else if (sprite.type === 'neon_sign') {
+                ctx.fillStyle = '#303030';
+                ctx.fillRect(-destW * 0.04, destH * 0.4, destW * 0.08, destH * 0.6);
+                
+                ctx.fillStyle = '#0a0a0d';
+                ctx.fillRect(-destW * 0.4, 0, destW * 0.8, destH * 0.5);
+                ctx.strokeStyle = sprite.color;
+                ctx.lineWidth = Math.max(2, destW * 0.03);
+                ctx.strokeRect(-destW * 0.4, 0, destW * 0.8, destH * 0.5);
+
+                ctx.fillStyle = '#FFFFFF';
+                ctx.shadowColor = sprite.color;
+                ctx.shadowBlur = Math.max(6, destW * 0.1);
+                ctx.font = `italic bold ${Math.max(6, destH * 0.15)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText("CYBER", 0, destH * 0.18);
+                ctx.fillStyle = sprite.color;
+                ctx.font = `bold ${Math.max(8, destH * 0.2)}px sans-serif`;
+                ctx.fillText("ZONE", 0, destH * 0.35);
+                ctx.shadowBlur = 0;
+
+            } else if (sprite.type === 'streetlight') {
+                ctx.fillStyle = '#B0BEC5';
+                ctx.fillRect(-destW * 0.03, 0, destW * 0.06, destH);
+                
+                ctx.fillStyle = '#263238';
+                ctx.fillRect(-destW * 0.14, 0, destW * 0.28, destH * 0.08);
+
+                let lightGrad = ctx.createLinearGradient(0, destH * 0.08, 0, destH);
+                lightGrad.addColorStop(0, 'rgba(0, 229, 255, 0.45)'); // シアンネオン光線コーン
+                lightGrad.addColorStop(1, 'rgba(0, 229, 255, 0)');
+                ctx.fillStyle = lightGrad;
+                
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.1, destH * 0.08);
+                ctx.lineTo(-destW * 1.3, destH);
+                ctx.lineTo(destW * 1.3, destH);
+                ctx.lineTo(destW * 0.1, destH * 0.08);
+                ctx.closePath();
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // 敵車の多様化＆車らしく見える超ブラッシュアップレンダリング (Type0, 1, 2)
+        function drawRivalCar(car, segment, width, height) {
+            const scale = segment.p1.screen.scale;
+            const destX = segment.p1.screen.x + (car.offset * segment.p1.screen.w);
+            const destY = segment.p1.screen.y;
+
+            const carW = 500; 
+            const carH = 220;
+
+            const destW = Math.round(carW * scale * width / 2);
+            const destH = Math.round(carH * scale * width / 2);
+
+            if (destX + destW/2 < 0 || destX - destW/2 > width) return;
+
+            ctx.save();
+            ctx.translate(destX, destY - destH * 0.15); 
+
+            // 地面のフラットシャドウ
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(-destW * 0.58, 0, destW * 1.16, destH * 0.15);
+
+            // ローポリゴン・タイヤ描画用サブ関数
+            const drawRivalTyre = (tx, ty, tw, th, isLeft) => {
+                ctx.save();
+                ctx.translate(tx, ty);
+                ctx.rotate(isLeft ? 0.05 : -0.05);
+                ctx.fillStyle = '#0f0f12';
+                ctx.beginPath();
+                ctx.moveTo(-tw*0.5, -th*0.3);
+                ctx.lineTo(-tw*0.25, -th*0.5);
+                ctx.lineTo(tw*0.25, -th*0.5);
+                ctx.lineTo(tw*0.5, -th*0.3);
+                ctx.lineTo(tw*0.5, th*0.4);
+                ctx.lineTo(tw*0.25, th*0.5);
+                ctx.lineTo(-tw*0.25, th*0.5);
+                ctx.lineTo(-tw*0.5, th*0.4);
+                ctx.closePath();
+                ctx.fill();
+                
+                // インナーホイール
+                ctx.fillStyle = '#546E7A';
+                ctx.fillRect(-tw*0.2, -th*0.2, tw*0.4, th*0.4);
+                ctx.restore();
+            }
+
+            // 車種ごとの極限ディテール描写 (後ろ姿)
+            if (car.type === 0) {
+                // ==================== 【Type 0: 流線型スポーツクーペ】 ====================
+                drawRivalTyre(-destW * 0.42, -destH * 0.1, destW * 0.16, destH * 0.45, true);
+                drawRivalTyre(destW * 0.42, -destH * 0.1, destW * 0.16, destH * 0.45, false);
+
+                // メイン・バンパー/リアフェンダー
+                ctx.fillStyle = car.color;
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.48, -destH * 0.42);
+                ctx.lineTo(-destW * 0.44, -destH * 0.12);
+                ctx.lineTo(0, -destH * 0.1);
+                ctx.lineTo(0, -destH * 0.42);
+                ctx.closePath();
+                ctx.fill();
+                
+                // 右半分
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.beginPath();
+                ctx.moveTo(0, -destH * 0.42);
+                ctx.lineTo(0, -destH * 0.1);
+                ctx.lineTo(destW * 0.44, -destH * 0.12);
+                ctx.lineTo(destW * 0.48, -destH * 0.42);
+                ctx.closePath();
+                ctx.fill();
+
+                // テールレンズベゼル
+                ctx.fillStyle = '#111';
+                ctx.fillRect(-destW * 0.45, -destH * 0.40, destW * 0.9, destH * 0.12);
+
+                // 丸目4灯テールランプ
+                const isBright = car.isLockedOn || (Math.floor(Date.now() / 150) % 2 === 0 && car.speed > 240);
+                ctx.fillStyle = isBright ? '#FF1744' : '#880E4F';
+                ctx.beginPath();
+                ctx.arc(-destW * 0.35, -destH * 0.34, destW * 0.035, 0, Math.PI*2);
+                ctx.arc(-destW * 0.23, -destH * 0.34, destW * 0.035, 0, Math.PI*2);
+                ctx.arc(destW * 0.23, -destH * 0.34, destW * 0.035, 0, Math.PI*2);
+                ctx.arc(destW * 0.35, -destH * 0.34, destW * 0.035, 0, Math.PI*2);
+                ctx.fill();
+
+                // リアナンバープレート
+                ctx.fillStyle = '#ECEFF1';
+                ctx.fillRect(-destW * 0.09, -destH * 0.24, destW * 0.18, destH * 0.1);
+                ctx.fillStyle = '#2E7D32';
+                ctx.font = `bold ${Math.max(4, destH * 0.06)}px sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText("3D", 0, -destH * 0.19);
+
+                // 斜めのなだらかなリアガラス
+                ctx.fillStyle = '#0d1124';
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.34, -destH * 0.42);
+                ctx.lineTo(-destW * 0.24, -destH * 0.76);
+                ctx.lineTo(destW * 0.24, -destH * 0.76);
+                ctx.lineTo(destW * 0.34, -destH * 0.42);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#26c6da'; 
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.15, -destH * 0.42);
+                ctx.lineTo(-destW * 0.08, -destH * 0.73);
+                ctx.lineTo(destW * 0.12, -destH * 0.73);
+                ctx.lineTo(destW * 0.05, -destH * 0.42);
+                ctx.closePath();
+                ctx.fill();
+
+                // ルーフキャノピー
+                ctx.fillStyle = car.color;
+                ctx.fillRect(-destW * 0.24, -destH * 0.81, destW * 0.48, destH * 0.05);
+
+                // 大型GTリアウイング
+                ctx.fillStyle = '#151515';
+                ctx.fillRect(-destW * 0.36, -destH * 0.65, destW * 0.04, destH * 0.24); 
+                ctx.fillRect(destW * 0.32, -destH * 0.65, destW * 0.04, destH * 0.24); 
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.46, -destH * 0.73);
+                ctx.lineTo(destW * 0.46, -destH * 0.73);
+                ctx.lineTo(destW * 0.42, -destH * 0.62);
+                ctx.lineTo(-destW * 0.42, -destH * 0.62);
+                ctx.closePath();
+                ctx.fill();
+
+                // デュアルメッキマフラー
+                ctx.fillStyle = '#CFD8DC';
+                ctx.beginPath();
+                ctx.arc(-destW * 0.36, -destH * 0.1, destW * 0.04, 0, Math.PI*2);
+                ctx.arc(destW * 0.36, -destH * 0.1, destW * 0.04, 0, Math.PI*2);
+                ctx.fill();
+
+            } else if (car.type === 1) {
+                // ==================== 【Type 1: クラシック・ピックアップトラック】 ====================
+                drawRivalTyre(-destW * 0.43, -destH * 0.1, destW * 0.18, destH * 0.42, true);
+                drawRivalTyre(destW * 0.43, -destH * 0.1, destW * 0.18, destH * 0.42, false);
+
+                // 荷台テールゲート
+                ctx.fillStyle = car.color;
+                ctx.fillRect(-destW * 0.48, -destH * 0.54, destW * 0.96, destH * 0.42);
+                
+                ctx.fillStyle = 'rgba(0,0,0,0.18)';
+                ctx.fillRect(-destW * 0.48, -destH * 0.54, destW * 0.48, destH * 0.42);
+
+                // CHEVYロゴ
+                ctx.fillStyle = 'rgba(255,255,255,0.22)';
+                ctx.fillRect(-destW * 0.3, -destH * 0.44, destW * 0.6, destH * 0.14);
+                ctx.fillStyle = '#000';
+                ctx.font = `italic bold ${Math.max(6, destH * 0.08)}px 'Press Start 2P', monospace`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText("CHEVY", 0, -destH * 0.37);
+
+                // 立体荷台ベッド
+                ctx.fillStyle = '#1e1e24';
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.42, -destH * 0.54);
+                ctx.lineTo(-destW * 0.36, -destH * 0.72);
+                ctx.lineTo(destW * 0.36, -destH * 0.72);
+                ctx.lineTo(destW * 0.42, -destH * 0.54);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#111';
+                ctx.fillRect(-destW * 0.36, -destH * 0.71, destW * 0.72, destH * 0.16);
+
+                // キャビン
+                ctx.fillStyle = car.color;
+                ctx.fillRect(-destW * 0.28, -destH * 0.84, destW * 0.56, destH * 0.13);
+                ctx.fillStyle = '#1c2030';
+                ctx.fillRect(-destW * 0.22, -destH * 0.8, destW * 0.44, destH * 0.18);
+
+                // リアバンパー
+                ctx.fillStyle = '#CFD8DC';
+                ctx.fillRect(-destW * 0.5, -destH * 0.14, destW * 1.0, destH * 0.06);
+
+                // テールライト
+                ctx.fillStyle = '#D50000';
+                ctx.fillRect(-destW * 0.46, -destH * 0.46, destW * 0.05, destH * 0.16);
+                ctx.fillRect(destW * 0.41, -destH * 0.46, destW * 0.05, destH * 0.16);
+
+            } else {
+                // ==================== 【Type 2: 70s クラシックマッスルセダン】 ====================
+                drawRivalTyre(-destW * 0.44, -destH * 0.1, destW * 0.17, destH * 0.44, true);
+                drawRivalTyre(destW * 0.44, -destH * 0.1, destW * 0.17, destH * 0.44, false);
+
+                // セダンボディ
+                ctx.fillStyle = car.color;
+                ctx.fillRect(-destW * 0.48, -destH * 0.46, destW * 0.96, destH * 0.36);
+                ctx.fillStyle = 'rgba(0,0,0,0.18)';
+                ctx.fillRect(-destW * 0.48, -destH * 0.48, destW * 0.48, destH * 0.36);
+
+                // トランクフード
+                ctx.fillStyle = car.color;
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.48, -destH * 0.46);
+                ctx.lineTo(-destW * 0.42, -destH * 0.58);
+                ctx.lineTo(destW * 0.42, -destH * 0.58);
+                ctx.lineTo(destW * 0.48, -destH * 0.46);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(255,255,255,0.08)';
+                ctx.beginPath();
+                ctx.moveTo(0, -destH * 0.46);
+                ctx.lineTo(0, -destH * 0.58);
+                ctx.lineTo(destW * 0.42, -destH * 0.58);
+                ctx.lineTo(destW * 0.48, -destH * 0.46);
+                ctx.closePath();
+                ctx.fill();
+
+                // ルーフキャビン
+                ctx.fillStyle = '#0d1124';
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.35, -destH * 0.58);
+                ctx.lineTo(-destW * 0.28, -destH * 0.88); 
+                ctx.lineTo(destW * 0.28, -destH * 0.88);
+                ctx.lineTo(destW * 0.35, -destH * 0.58);
+                ctx.closePath();
+                ctx.fill();
+
+                // リアウィンドウ
+                ctx.fillStyle = '#26c6da';
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.24, -destH * 0.61);
+                ctx.lineTo(-destW * 0.18, -destH * 0.84);
+                ctx.lineTo(destW * 0.18, -destH * 0.84);
+                ctx.lineTo(destW * 0.24, -destH * 0.61);
+                ctx.closePath();
+                ctx.fill();
+
+                // テールライトベゼル
+                ctx.fillStyle = '#151515';
+                ctx.fillRect(-destW * 0.44, -destH * 0.42, destW * 0.88, destH * 0.14);
+
+                // テールランプ
+                ctx.fillStyle = '#C62828';
+                for (let i = -4; i <= 4; i++) {
+                    if (i !== 0) {
+                        ctx.fillRect(i * (destW * 0.09) - destW * 0.03, -destH * 0.39, destW * 0.06, destH * 0.08);
+                    }
+                }
+
+                // クロームバンパー
+                ctx.fillStyle = '#B0BEC5';
+                ctx.fillRect(-destW * 0.49, -destH * 0.16, destW * 0.98, destH * 0.06);
+
+                // デュアルマフラー
+                ctx.fillStyle = '#78909C';
+                ctx.fillRect(-destW * 0.32, -destH * 0.12, destW * 0.05, destH * 0.08);
+                ctx.fillRect(destW * 0.27, -destH * 0.12, destW * 0.05, destH * 0.08);
+            }
+
+            // ロックオン突撃中のパッシング明滅
+            if (car.isLockedOn && Math.floor(Date.now() / 60) % 2 === 0) {
+                ctx.shadowColor = '#FFEB3B';
+                ctx.shadowBlur = 30;
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.arc(-destW * 0.3, -destH * 0.35, destW * 0.09, 0, Math.PI * 2);
+                ctx.arc(destW * 0.3, -destH * 0.35, destW * 0.09, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            ctx.restore();
+        }
+
+        // 自車の描画（サスペンションバウンス値・コマスピン横変形・救急車3Dポリゴン描画）
+        function drawPlayerCar() {
+            const width = CANVAS_W;
+            const height = CANVAS_H;
+
+            // 救急車：縦横比をスタイリッシュなボクシータイプに設定（幅280 × 高さ210）
+            const playerW = 280; 
+            const playerH = 210;
+            
+            const destW = playerW;
+            const destH = playerH;
+
+            const speedRatio = speed / MAX_SPEED;
+            let vibration = (speed > 100) ? (Math.random() - 0.5) * 4 * speedRatio : 0;
+            if (crashTimer > 0) {
+                vibration = (Math.random() - 0.5) * 20; 
+            }
+            
+            const destX = width / 2;
+            
+            // バンプドラフト中は自車を少し前方にスライド
+            let destY = height - 90 + (speedRatio * 15) + vibration + carBounceY; 
+            if (bumpDraftTimer > 0) {
+                destY -= 80; 
+            }
+
+            ctx.save();
+            ctx.translate(destX, destY);
+
+            // 曲がるときの車体傾斜（ロール）を完全に廃止 (通常時は常にロール 0)
+            let rollAngle = 0;   
+            let yawSlide = 0;    
+            let scaleXFactor = 1.0; 
+
+            if (crashTimer > 0) {
+                // スピン中の時だけ回転（コマスピン）
+                rollAngle = playerSpinAngle * 0.15; 
+                scaleXFactor = Math.cos(playerSpinAngle); 
+            } else {
+                // 通常時：傾きは 0、遠心力のドリフト横スライド移動のみ
+                if (keys['ArrowLeft'] || keys['KeyA']) {
+                    yawSlide = -25 * speedRatio;
+                    scaleXFactor = 0.96; 
+                } else if (keys['ArrowRight'] || keys['KeyD']) {
+                    yawSlide = 25 * speedRatio;
+                    scaleXFactor = 0.96;
+                }
+            }
+
+            ctx.translate(yawSlide, 0);
+            ctx.rotate(rollAngle);
+            ctx.scale(Math.abs(scaleXFactor), 1.0); 
+
+            // スピン角度から向きを割り出し
+            let normAngle = (playerSpinAngle % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+
+            // タイヤの配置 (左右対称、かつ車体幅のしっかり「端」に配置)
+            const tyreY = -destH * 0.12; 
+            const tyreW = destW * 0.18;
+            const tyreH = destH * 0.45;
+
+            const drawPlayerTyreFixed = (tx, ty) => {
+                ctx.fillStyle = '#0f0f12';
+                ctx.beginPath();
+                ctx.moveTo(tx - tyreW*0.5, ty - tyreH*0.25);
+                ctx.lineTo(tx - tyreW*0.25, ty - tyreH*0.5);
+                ctx.lineTo(tx + tyreW*0.25, ty - tyreH*0.5);
+                ctx.lineTo(tx + tyreW*0.5, ty - tyreH*0.25);
+                ctx.lineTo(tx + tyreW*0.5, ty + tyreH*0.35);
+                ctx.lineTo(tx + tyreW*0.25, ty + tyreH*0.5);
+                ctx.lineTo(tx - tyreW*0.25, ty + tyreH*0.5);
+                ctx.lineTo(tx - tyreW*0.5, ty + tyreH*0.35);
+                ctx.closePath();
+                ctx.fill();
+                
+                ctx.fillStyle = '#CFD8DC';
+                ctx.beginPath();
+                ctx.arc(tx, ty, tyreW * 0.24, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // 赤色灯の点滅コントロール
+            const lightOn = Math.floor(Date.now() / 150) % 2 === 0;
+
+            // ゲームオーバー（墓石描画）
+            if (isGameOver) {
+                ctx.fillStyle = '#555555';
+                ctx.fillRect(-destW * 0.35, -5, destW * 0.7, 10);
+                
+                ctx.fillStyle = '#9E9E9E'; 
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.25, -5);
+                ctx.lineTo(-destW * 0.25, -destH * 0.75);
+                ctx.quadraticCurveTo(0, -destH * 0.95, destW * 0.25, -destH * 0.75);
+                ctx.lineTo(destW * 0.25, -5);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#757575'; 
+                ctx.beginPath();
+                ctx.moveTo(destW * 0.25, -5);
+                ctx.lineTo(destW * 0.25, -destH * 0.75);
+                ctx.lineTo(destW * 0.31, -destH * 0.7);
+                ctx.lineTo(destW * 0.31, -2);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#BDBDBD';
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.25, -destH * 0.75);
+                ctx.quadraticCurveTo(0, -destH * 0.95, destW * 0.25, -destH * 0.75);
+                ctx.lineTo(destW * 0.31, -destH * 0.7);
+                ctx.quadraticCurveTo(0 + destW * 0.06, -destH * 0.9, -destW * 0.19, -destH * 0.7);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#303030';
+                ctx.font = `bold ${Math.max(10, destH * 0.08)}px 'Press Start 2P', monospace`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText("R.I.P.", 0, -destH * 0.52);
+
+                ctx.fillStyle = '#303030';
+                ctx.fillRect(-destW * 0.02, -destH * 0.4, destW * 0.04, destH * 0.18); 
+                ctx.fillRect(-destW * 0.08, -destH * 0.34, destW * 0.16, destH * 0.04); 
+
+                ctx.restore();
+                return;
+            }
+
+            // スピン角度に基づき描き分け
+            if (normAngle >= Math.PI * 0.25 && normAngle < Math.PI * 0.75) {
+                // ==================== 🚑 【右側面 (SIDE RIGHT)】 ====================
+                // 端にタイヤを均等に配置
+                drawPlayerTyreFixed(-destW * 0.38, tyreY);
+                drawPlayerTyreFixed(destW * 0.38, tyreY);
+
+                ctx.fillStyle = '#E0E0E0'; 
+                ctx.fillRect(-destW * 0.48, -destH * 0.9, destW * 0.96, destH * 0.75);
+                
+                // 赤ストライプライン（赤い帯の位置を中央高めの中段に引き上げてテールライトとの重複を完全に防止）
+                ctx.fillStyle = '#D50000';
+                ctx.fillRect(-destW * 0.48, -destH * 0.65, destW * 0.96, destH * 0.12);
+
+                // 赤十字マーク
+                ctx.fillStyle = '#D50000';
+                ctx.fillRect(-destW * 0.15, -destH * 0.7, destW * 0.1, destH * 0.03); 
+                ctx.fillRect(-destW * 0.115, -destH * 0.735, destW * 0.03, destH * 0.1); 
+
+                // キャビン窓
+                ctx.fillStyle = '#111322';
+                ctx.beginPath();
+                ctx.moveTo(destW * 0.18, -destH * 0.9);
+                ctx.lineTo(destW * 0.36, -destH * 0.9);
+                ctx.lineTo(destW * 0.42, -destH * 0.6);
+                ctx.lineTo(destW * 0.22, -destH * 0.6);
+                ctx.closePath();
+                ctx.fill();
+
+                // サイドガラス
+                ctx.fillStyle = '#111322';
+                ctx.fillRect(-destW * 0.38, -destH * 0.78, destW * 0.18, destH * 0.15);
+
+                // 赤色灯（ルーフの上）
+                ctx.fillStyle = lightOn ? '#FF1744' : '#500000';
+                ctx.fillRect(destW * 0.12, -destH * 1.0, destW * 0.15, destH * 0.1);
+                ctx.fillStyle = !lightOn ? '#FF1744' : '#500000';
+                ctx.fillRect(-destW * 0.22, -destH * 1.0, destW * 0.15, destH * 0.1);
+
+            } else if (normAngle >= Math.PI * 1.25 && normAngle < Math.PI * 1.75) {
+                // ==================== 🚑 【左側面 (SIDE LEFT)】 ====================
+                drawPlayerTyreFixed(-destW * 0.38, tyreY);
+                drawPlayerTyreFixed(destW * 0.38, tyreY);
+
+                ctx.fillStyle = '#FFFFFF'; 
+                ctx.fillRect(-destW * 0.48, -destH * 0.9, destW * 0.96, destH * 0.75);
+                
+                // 赤ストライプライン
+                ctx.fillStyle = '#D50000';
+                ctx.fillRect(-destW * 0.48, -destH * 0.65, destW * 0.96, destH * 0.12);
+
+                // 赤十字マーク
+                ctx.fillStyle = '#D50000';
+                ctx.fillRect(destW * 0.05, -destH * 0.7, destW * 0.1, destH * 0.03); 
+                ctx.fillRect(destW * 0.085, -destH * 0.735, destW * 0.03, destH * 0.1); 
+
+                // キャビン窓
+                ctx.fillStyle = '#1C2035';
+                ctx.beginPath();
+                ctx.moveTo(-destW * 0.36, -destH * 0.9);
+                ctx.lineTo(-destW * 0.18, -destH * 0.9);
+                ctx.lineTo(-destW * 0.22, -destH * 0.6);
+                ctx.lineTo(-destW * 0.42, -destH * 0.6);
+                ctx.closePath();
+                ctx.fill();
+
+                // サイドガラス
+                ctx.fillStyle = '#1C2035';
+                ctx.fillRect(destW * 0.2, -destH * 0.78, destW * 0.18, destH * 0.15);
+
+                // 赤色灯（ルーフの上）
+                ctx.fillStyle = lightOn ? '#FF1744' : '#500000';
+                ctx.fillRect(destW * 0.08, -destH * 1.0, destW * 0.15, destH * 0.1);
+                ctx.fillStyle = !lightOn ? '#FF1744' : '#500000';
+                ctx.fillRect(-destW * 0.26, -destH * 1.0, destW * 0.15, destH * 0.1);
+
+            } else if (normAngle >= Math.PI * 0.75 && normAngle < Math.PI * 1.25) {
+                // ==================== 🚑 【前面 (FRONT VIEW)】 ====================
+                drawPlayerTyreFixed(-destW * 0.38, tyreY);
+                drawPlayerTyreFixed(destW * 0.38, tyreY);
+
+                ctx.fillStyle = '#E0E0E0'; 
+                ctx.fillRect(-destW * 0.45, -destH * 0.88, destW * 0.45, destH * 0.7);
+                ctx.fillStyle = '#FFFFFF'; 
+                ctx.fillRect(0, -destH * 0.88, destW * 0.45, destH * 0.7);
+
+                // 赤いフロントライン（前面ストライプ高さを中段に統一）
+                ctx.fillStyle = '#D50000';
+                ctx.fillRect(-destW * 0.45, -destH * 0.65, destW * 0.9, destH * 0.08);
+
+                // フロントグリル
+                ctx.fillStyle = '#1A1A1A'; 
+                ctx.fillRect(-destW * 0.38, -destH * 0.32, destW * 0.76, destH * 0.12);
+                ctx.strokeStyle = '#ECEFF1';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(-destW * 0.38, -destH * 0.32, destW * 0.76, destH * 0.12);
+
+                // 丸目2灯ヘッドライト
+                ctx.fillStyle = '#FFFDE7';
+                ctx.beginPath();
+                ctx.arc(-destW * 0.28, -destH * 0.26, destW * 0.05, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(destW * 0.28, -destH * 0.26, destW * 0.05, 0, Math.PI * 2);
+                ctx.fill();
+
+                // フロントウィンドウ
+                ctx.fillStyle = '#111322';
+                ctx.fillRect(-destW * 0.36, -destH * 0.78, destW * 0.36, destH * 0.28);
+                ctx.fillStyle = '#1C2035';
+                ctx.fillRect(0, -destH * 0.78, destW * 0.36, destH * 0.28);
+                
+                // 赤色灯 (前面パトランプ)
+                ctx.fillStyle = lightOn ? '#FF1744' : '#500000';
+                ctx.fillRect(-destW * 0.25, -destH * 0.96, destW * 0.16, destH * 0.08);
+                ctx.fillStyle = !lightOn ? '#FF1744' : '#500000';
+                ctx.fillRect(destW * 0.09, -destH * 0.96, destW * 0.16, destH * 0.08);
+
+                // フロントバンパー
+                ctx.fillStyle = '#CFD8DC';
+                ctx.fillRect(-destW * 0.48, -destH * 0.18, destW * 0.96, destH * 0.06);
+
+            } else {
+                // ==================== 🚑 【背面 (REAR VIEW - 通常時)】 ====================
+                // タイヤ配置を対称に端っこに配置！
+                drawPlayerTyreFixed(-destW * 0.38, tyreY);
+                drawPlayerTyreFixed(destW * 0.38, tyreY);
+
+                // 背面のホワイトボディ
+                ctx.fillStyle = '#E0E0E0'; 
+                ctx.fillRect(-destW * 0.45, -destH * 0.9, destW * 0.45, destH * 0.74);
+                ctx.fillStyle = '#FFFFFF'; 
+                ctx.fillRect(0, -destH * 0.9, destW * 0.45, destH * 0.74);
+
+                // 背面の赤いストライプ帯をテールライトと完全に切り離すため、中央部（中段）へ引き上げ！
+                ctx.fillStyle = '#D50000';
+                ctx.fillRect(-destW * 0.45, -destH * 0.65, destW * 0.9, destH * 0.12);
+
+                // 観音開きドアのスリット
+                ctx.strokeStyle = '#BDBDBD';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.moveTo(0, -destH * 0.9);
+                ctx.lineTo(0, -destH * 0.16);
+                ctx.stroke();
+
+                // リアウィンドウ左右
+                ctx.fillStyle = '#111322';
+                ctx.fillRect(-destW * 0.34, -destH * 0.82, destW * 0.24, destH * 0.26);
+                ctx.fillStyle = '#1C2035';
+                ctx.fillRect(destW * 0.1, -destH * 0.82, destW * 0.24, destH * 0.26);
+
+                // ルーフの赤色灯（パトランプ）
+                ctx.fillStyle = lightOn ? '#FF1744' : '#500000';
+                ctx.fillRect(-destW * 0.26, -destH * 0.98, destW * 0.16, destH * 0.08);
+                ctx.fillStyle = !lightOn ? '#FF1744' : '#500000';
+                ctx.fillRect(destW * 0.1, -destH * 0.98, destW * 0.16, destH * 0.08);
+
+                // リアメッキバンパー
+                ctx.fillStyle = '#CFD8DC';
+                ctx.fillRect(-destW * 0.48, -destH * 0.16, destW * 0.96, destH * 0.06);
+
+                // テールライトをバンパーのすぐ上（赤い帯と一切被らない低い位置）に配置！
+                ctx.fillStyle = '#B71C1C'; // 左
+                ctx.fillRect(-destW * 0.42, -destH * 0.38, destW * 0.04, destH * 0.14);
+                ctx.fillStyle = '#D50000'; // 右
+                ctx.fillRect(destW * 0.38, -destH * 0.38, destW * 0.04, destH * 0.14);
+            }
+
+            ctx.restore();
+        } // 救急車自車描画（drawPlayerCar）関数の閉じカッコ
+
+        // 後ろから自車を押している敵車を描画する関数 (バンプドラフト中のリアアップ表示)
+        function drawPushingCar(car, width, height) {
+            const speedRatio = speed / MAX_SPEED;
+            const isLeftActive = keys['ArrowLeft'] || keys['KeyA'];
+            const isRightActive = keys['ArrowRight'] || keys['KeyD'];
+
+            let yawSlide = 0;
+            if (isLeftActive) {
+                yawSlide = -25 * speedRatio;
+            } else if (isRightActive) {
+                yawSlide = 25 * speedRatio;
+            }
+
+            const destX = width / 2 + yawSlide;
+            const vibration = (speed > 100) ? (Math.random() - 0.5) * 4 * speedRatio : 0;
+            const playerDestY = height - 90 + (speedRatio * 15) + vibration + carBounceY - 80;
+            
+            // ★超緻密＆速く見せるための「極限密着ドアップ位置」へ敵のフロントを寄せる！
+            const destY = playerDestY + 52; 
+
+            // ドアップのためさらにスケールを拡張！
+            const scale = 1.15; 
+            const carW = 320 * scale;
+            const carH = 150 * scale;
+
+            ctx.save();
+            ctx.translate(destX, destY);
+            // 押し合っている時の激しい縦揺れインパルス
+            ctx.translate((Math.random() - 0.5) * 5, (Math.random() - 0.5) * 5);
+
+            // タイヤ描画
+            ctx.fillStyle = '#0a0a0d';
+            ctx.fillRect(-carW * 0.43, -carH * 0.15, carW * 0.15, carH * 0.35);
+            ctx.fillRect(carW * 0.28, -carH * 0.15, carW * 0.15, carH * 0.35);
+
+            // シャシ影
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(-carW * 0.45, -carH * 0.05, carW * 0.9, carH * 0.12);
+
+            // 緻密化した敵車の前面フェイス（車種ごとにソリッドな3Dポリゴンを描写）
+            if (car.type === 1) {
+                ctx.fillStyle = car.color;
+                ctx.fillRect(-carW * 0.45, -carH * 0.6, carW * 0.9, carH * 0.5);
+
+                ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                ctx.beginPath();
+                ctx.moveTo(-carW * 0.45, -carH * 0.6);
+                ctx.lineTo(-carW * 0.38, -carH * 0.82);
+                ctx.lineTo(carW * 0.38, -carH * 0.82);
+                ctx.lineTo(carW * 0.45, -carH * 0.6);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#111';
+                ctx.fillRect(-carW * 0.4, -carH * 0.45, carW * 0.8, carH * 0.2);
+                ctx.strokeStyle = '#ECEFF1';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(-carW * 0.4, -carH * 0.45, carW * 0.8, carH * 0.2);
+
+                ctx.fillStyle = '#FFFDE7';
+                ctx.beginPath();
+                ctx.arc(-carW * 0.3, -carH * 0.35, carW * 0.06, 0, Math.PI * 2);
+                ctx.arc(carW * 0.3, -carH * 0.35, carW * 0.06, 0, Math.PI * 2);
+                ctx.fill();
+
+            } else if (car.type === 2) {
+                ctx.fillStyle = car.color;
+                ctx.fillRect(-carW * 0.46, -carH * 0.55, carW * 0.92, carH * 0.45);
+
+                ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                ctx.beginPath();
+                ctx.moveTo(-carW * 0.46, -carH * 0.55);
+                ctx.lineTo(-carW * 0.38, -carH * 0.8);
+                ctx.lineTo(carW * 0.38, -carH * 0.8);
+                ctx.lineTo(carW * 0.46, -carH * 0.55);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#151515';
+                ctx.fillRect(-carW * 0.42, -carH * 0.42, carW * 0.84, carH * 0.18);
+                ctx.strokeStyle = '#90A4AE';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(-carW * 0.42, -carH * 0.42, carW * 0.84, carH * 0.18);
+
+                ctx.fillStyle = '#FFFDE7';
+                ctx.beginPath();
+                ctx.arc(-carW * 0.34, -carH * 0.33, carW * 0.045, 0, Math.PI * 2);
+                ctx.arc(-carW * 0.24, -carH * 0.33, carW * 0.045, 0, Math.PI * 2);
+                ctx.arc(carW * 0.24, -carH * 0.33, carW * 0.045, 0, Math.PI * 2);
+                ctx.arc(carW * 0.32, -carH * 0.33, carW * 0.045, 0, Math.PI * 2);
+                ctx.fill();
+
+            } else {
+                ctx.fillStyle = car.color;
+                ctx.beginPath();
+                ctx.moveTo(-carW * 0.45, -carH * 0.15);
+                ctx.lineTo(-carW * 0.42, -carH * 0.52);
+                ctx.lineTo(carW * 0.42, -carH * 0.52);
+                ctx.lineTo(carW * 0.45, -carH * 0.15);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                ctx.beginPath();
+                ctx.moveTo(-carW * 0.42, -carH * 0.52);
+                ctx.lineTo(-carW * 0.34, -carH * 0.78);
+                ctx.lineTo(carW * 0.34, -carH * 0.78);
+                ctx.lineTo(carW * 0.42, -carH * 0.52);
+                ctx.closePath();
+                ctx.fill();
+
+                ctx.fillStyle = '#151515';
+                ctx.fillRect(-carW * 0.38, -carH * 0.38, carW * 0.76, carH * 0.12);
+                ctx.fillStyle = '#FFFDE7';
+                ctx.fillRect(-carW * 0.35, -carH * 0.35, carW * 0.12, carH * 0.06);
+                ctx.fillRect(carW * 0.23, -carH * 0.35, carW * 0.12, carH * 0.06);
+            }
+
+            ctx.fillStyle = '#111322';
+            ctx.beginPath();
+            ctx.moveTo(-carW * 0.28, -carH * 0.76);
+            ctx.lineTo(-carW * 0.18, -carH * 1.05);
+            ctx.lineTo(carW * 0.18, -carH * 1.05);
+            ctx.lineTo(carW * 0.28, -carH * 0.76);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.fillStyle = '#00e5ff'; 
+            ctx.beginPath();
+            ctx.moveTo(-carW * 0.22, -carH * 0.79);
+            ctx.lineTo(-carW * 0.14, -carH * 1.01);
+            ctx.lineTo(carW * 0.14, -carH * 1.01);
+            ctx.lineTo(carW * 0.22, -carH * 0.79);
+            ctx.closePath();
+            ctx.fill();
+
+            if (Math.floor(Date.now() / 60) % 2 === 0) {
+                ctx.shadowColor = '#FFEB3B';
+                ctx.shadowBlur = 40;
+                ctx.fillStyle = '#FFFFFF';
+                ctx.beginPath();
+                ctx.arc(-carW * 0.3, -carH * 0.35, carW * 0.08, 0, Math.PI * 2);
+                ctx.arc(carW * 0.3, -carH * 0.35, carW * 0.08, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+
+            // ★緻密化追加：バンプ押し合い中の激突火花（スパーク）を、フロント接地面から常時大量放出！
+            ctx.save();
+            ctx.fillStyle = '#FF9100';
+            ctx.shadowColor = '#FF3D00';
+            ctx.shadowBlur = 10;
+            for (let i = 0; i < 6; i++) {
+                const spSize = 3 + Math.random() * 5;
+                const spX = (Math.random() - 0.5) * carW * 0.7;
+                // バンパー接地面
+                ctx.fillRect(spX, -carH * 0.1, spSize, spSize);
+            }
+            ctx.restore();
+
+            ctx.restore();
+        }
+
+        // --- 安全にAudioContextを初期化してゲームを開始する関数 (★復元完了) ---
+        function triggerStartSequence() {
+            if (audioCtx) {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume().then(() => {
+                        initEngineNode();
+                        startGame();
+                    }).catch(err => {
+                        console.warn("AudioContext resume failed:", err);
+                        initEngineNode();
+                        startGame(); 
+                    });
+                    return;
+                } else {
+                    initEngineNode();
+                }
+            }
+            startGame();
+        }
+
+        // ★★★ 【バグ修正】消失していた「startGame」関数をここに完全復元・定義！ ★★★
+        function startGame() {
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('resultScreen').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+
+            // 状態リセット
+            position = 0;
+            playerX = 0;
+            speed = 0;
+            maxRecordedSpeed = 0;
+            hp = 100;
+            isGameOver = false;
+            hasCleared = false;
+            crashTimer = 0;
+            flashScreenTimer = 0;
+            screenShake = 0;
+            playerXVelocity = 0;
+            carBounceY = 0;
+            carBounceVelocity = 0;
+            steeringLockTimer = 0;
+            playerSpinAngle = 0;
+            bumpDraftTimer = 0;
+            bumpDraftingCar = null;
+
+            // シールドゲージリセット
+            document.getElementById('hpBar').style.width = '100%';
+            document.getElementById('hpText').innerText = '100';
+            
+            // コース生成
+            buildTrack();
+
+            isPlaying = true;
+            showCenterMessage("GET READY...", 1.5);
+            playBeep(440, 'sine', 0.2, 0.1); 
+
+            setTimeout(() => {
+                showCenterMessage("GO!!", 1.0);
+                playBeep(880, 'sine', 0.4, 0.15); 
+            }, 1500);
+
+            // gameLoop開始
+            lastTime = 0;
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- スリップスモーク（白煙）システム ---
+        function createTyreSmoke(posX, posY, count, driftForce) {
+            for (let i = 0; i < count; i++) {
+                tyreSmokeParticles.push({
+                    x: posX + (Math.random() - 0.5) * 15,
+                    y: posY + (Math.random() - 0.5) * 5,
+                    vx: (Math.random() - 0.5) * 4 + (driftForce * 3), 
+                    vy: -Math.random() * 3 - 2, 
+                    size: 8 + Math.random() * 12,
+                    maxSize: 30 + Math.random() * 40, 
+                    alpha: 0.35 + Math.random() * 0.15,
+                    vAlpha: 0.01 + Math.random() * 0.015, 
+                    growth: 0.8 + Math.random() * 1.2 
+                });
+            }
+        }
+
+        // スリップによるタイヤ白煙を描画・制御する関数
+        function updateAndDrawSmoke() {
+            ctx.save();
+            for (let i = tyreSmokeParticles.length - 1; i >= 0; i--) {
+                const s = tyreSmokeParticles[i];
+                s.x += s.vx;
+                s.y += s.vy;
+                s.size += s.growth;
+                s.alpha -= s.vAlpha;
+
+                if (s.alpha <= 0 || s.size >= s.maxSize) {
+                    tyreSmokeParticles.splice(i, 1);
+                    continue;
+                }
+
+                ctx.globalAlpha = s.alpha;
+                ctx.fillStyle = 'rgba(236, 239, 241, 0.9)'; 
+                
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+            ctx.globalAlpha = 1.0;
+        }
+
+        // ★★★ 【バグ修正】消失していた「initEngineNode」関数をここに完全定義！ ★★★
+        function initEngineNode() {
+            if (!audioCtx) return;
+            try {
+                stopEngineSound();
+
+                engineOsc1 = audioCtx.createOscillator();
+                engineOsc2 = audioCtx.createOscillator();
+                engineFilter = audioCtx.createBiquadFilter();
+                engineGain = audioCtx.createGain();
+
+                engineOsc1.type = 'sawtooth';
+                engineOsc2.type = 'square'; 
+                engineFilter.type = 'lowpass';
+
+                // 超重低音V8エキゾースト仕様
+                engineOsc1.frequency.setValueAtTime(28, audioCtx.currentTime);
+                engineOsc2.frequency.setValueAtTime(28.6, audioCtx.currentTime); 
+
+                engineFilter.frequency.setValueAtTime(120, audioCtx.currentTime);
+                engineFilter.Q.setValueAtTime(7.0, audioCtx.currentTime); 
+
+                engineGain.gain.setValueAtTime(0, audioCtx.currentTime); 
+
+                engineOsc1.connect(engineFilter);
+                engineOsc2.connect(engineFilter);
+                filter = engineFilter; // 互換性維持
+                engineFilter.connect(engineGain);
+                engineGain.connect(audioCtx.destination);
+
+                engineOsc1.start(0);
+                engineOsc2.start(0);
+            } catch (e) {
+                console.warn("initEngineNode failed:", e);
+            }
+        }
+
+        // ★★★ 【バグ修正】消失していた「loadHighScore」関数をここに完全復元・定義！ ★★★
+        function loadHighScore() {
+            const savedBest = localStorage.getItem('pb_distance') || '0';
+            const bestDistanceEl = document.getElementById('bestDistance');
+            if (bestDistanceEl) {
+                bestDistanceEl.innerText = `${savedBest} m`;
+            }
+        }
+
+        // 初期ロード
+        window.onload = function() {
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+            
+            // 起動時にハイスコアをロード
+            loadHighScore();
+
+            // マウスクリックでのスタートイベント
+            const startBtn = document.getElementById('startBtn');
+            if (startBtn) {
+                startBtn.addEventListener('click', triggerStartSequence);
+            }
+
+            const retryBtn = document.getElementById('retryBtn');
+            if (retryBtn) {
+                retryBtn.addEventListener('click', triggerStartSequence);
+            }
+        };
+    </script>
+</body>
+</html>
